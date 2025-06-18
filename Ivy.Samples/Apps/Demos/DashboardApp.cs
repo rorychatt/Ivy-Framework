@@ -1,4 +1,5 @@
 ﻿using Ivy.Charts;
+using Ivy.Samples.Apps.Widgets.Charts;
 using Ivy.Shared;
 using Microsoft.EntityFrameworkCore;
 
@@ -16,15 +17,41 @@ public class DashboardApp : ViewBase
                                     | new TotalSalesMetricView()
                                     )
             
-                                 | (Layout.Grid().Columns(3)
+                                 | (Layout.Grid().Columns(4)
                                     | new BrowsersView()
                                     | new MonthlyRevenueTrendView()
                                     | new MonthlyRevenueDistributionView()
+                                    | new CustomAreaChartView()
                                     )
 
             ;
     }
 }
+
+public class CustomAreaChartView : ViewBase
+{
+    public override object? Build()
+    {
+        var data = new[]
+        {
+            new { Month = "Jan", Desktop = 186, Mobile = 100 },
+            new { Month = "Feb", Desktop = 305, Mobile = 200 },
+            new { Month = "Mar", Desktop = 237, Mobile = 300 },
+            new { Month = "Apr", Desktop = 73, Mobile = 400 },
+            new { Month = "May", Desktop = 209, Mobile = 30 },
+            new { Month = "Jun", Desktop = 214, Mobile = 45 },
+        };
+
+        return new Card()
+                   .Title("Custom Area Chart")
+                   .Description("Custom area chart desc")
+               | data.ToAreaChart(style: AreaChartStyles.Dashboard)
+                   .Dimension("Month", e => e.Month)
+                   .Measure("Desktop", e => e.Sum(f => f.Desktop))
+                   .Measure("Mobile", e => e.Sum(f => f.Mobile));
+    }
+}
+
 
 public class TotalSalesMetricView : ViewBase
 {
@@ -86,7 +113,9 @@ public class MonthlyRevenueDistributionView : ViewBase
             new { Month = "Jun", Desktop = 214, Mobile = 45 },
         };
 
-        return new Card().Title("Monthly Revenue Distribution").Height("100%")
+        return new Card()
+                   .Title("Monthly Revenue Distribution")
+                   .Height("100%")
                | data.ToAreaChart(style:AreaChartStyles.Dashboard)
                    .Dimension("Month", e => e.Month)
                    .Measure("Desktop", e => e.Sum(f => f.Desktop))

@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": " node --max-old-space-size=4096 ./node_modules/vite/bin/vite.js build",
+    "build": "tsc -b && node --max-old-space-size=4096 ./node_modules/vite/bin/vite.js build",
     "lint": "eslint .",
     "preview": "vite preview"
   },
@@ -51,7 +51,6 @@
     "@tanstack/react-query": "^5.61.5",
     "@tanstack/react-virtual": "^3.11.1",
     "@uiw/react-codemirror": "^4.23.10",
-    "@vitejs/plugin-react-swc": "^3.10.2",
     "axios": "^1.7.8",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

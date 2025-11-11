@@ -32,9 +32,11 @@ public class BasicChatDemo : ViewBase
 
         void OnSendMessage(Event<Chat, string> @event)
         {
-            var currentMessages = messages.Value;
-            messages.Set(currentMessages.Add(new ChatMessage(ChatSender.User, @event.Value)));
-            messages.Set(currentMessages.Add(new ChatMessage(ChatSender.Assistant, $"You said: {@event.Value}")));
+            var messagesWithUser = messages.Value.Add(new ChatMessage(ChatSender.User, @event.Value));
+            messages.Set(messagesWithUser);
+
+            var messagesWithAssistant = messagesWithUser.Add(new ChatMessage(ChatSender.Assistant, $"You said: {@event.Value}"));
+            messages.Set(messagesWithAssistant);
         }
 
         return new Chat(messages.Value.ToArray(), OnSendMessage)
@@ -48,7 +50,9 @@ public class BasicChatDemo : ViewBase
 
 A chat that simulates AI processing with loading indicators.
 
-This example shows how to implement async message handling, display loading states using ChatStatus, and manage message updates during processing.
+First, the handler appends the user's message so the transcript updates immediately. It then pushes a `ChatStatus` entry that renders the animated "thinking" indicator while the asynchronous work (a delay in this demo, your AI call in production) runs. When the task completes, the status message is removed and replaced by the assistant's final response so the user never sees an empty gap.
+
+This example shows how to implement async message handling, display loading states using `ChatStatus`, and manage message updates during processing.
 
 ```csharp demo-tabs 
 public class LoadingChatDemo : ViewBase
@@ -61,18 +65,19 @@ public class LoadingChatDemo : ViewBase
 
         async ValueTask OnSendMessage(Event<Chat, string> @event)
         {
-            var currentMessages = messages.Value;
-            messages.Set(currentMessages.Add(new ChatMessage(ChatSender.User, @event.Value)));
+            var messagesWithUser = messages.Value.Add(new ChatMessage(ChatSender.User, @event.Value));
+            messages.Set(messagesWithUser);
             
             // Show loading state
-            messages.Set(currentMessages.Add(new ChatMessage(ChatSender.Assistant, new ChatStatus("Thinking..."))));
+            var messagesWithStatus = messagesWithUser.Add(new ChatMessage(ChatSender.Assistant, new ChatStatus("Thinking...")));
+            messages.Set(messagesWithStatus);
             
             // Simulate processing delay
             await Task.Delay(2000);
             
             // Remove loading and add response
-            var updatedMessages = messages.Value.Take(messages.Value.Length - 1).ToImmutableArray();
-            messages.Set(updatedMessages.Add(new ChatMessage(ChatSender.Assistant, 
+            var withoutStatus = messagesWithStatus.RemoveAt(messagesWithStatus.Length - 1);
+            messages.Set(withoutStatus.Add(new ChatMessage(ChatSender.Assistant, 
                 $"I processed your message: '{@event.Value}'. Here's a thoughtful response based on what you said.")));
         }
 
@@ -100,8 +105,8 @@ public class InteractiveChatDemo : ViewBase
 
         void OnSendMessage(Event<Chat, string> @event)
         {
-            var currentMessages = messages.Value;
-            messages.Set(currentMessages.Add(new ChatMessage(ChatSender.User, @event.Value)));
+            var messagesWithUser = messages.Value.Add(new ChatMessage(ChatSender.User, @event.Value));
+            messages.Set(messagesWithUser);
             
             object response = @event.Value.ToLower() switch
             {
@@ -120,7 +125,7 @@ public class InteractiveChatDemo : ViewBase
                 _ => $"You said: '{@event.Value}'. Try sending 'buttons', 'card', or 'form' for interactive responses!"
             };
             
-            messages.Set(currentMessages.Add(new ChatMessage(ChatSender.Assistant, response)));
+            messages.Set(messagesWithUser.Add(new ChatMessage(ChatSender.Assistant, response)));
         }
 
         return new Chat(messages.Value.ToArray(), OnSendMessage)
@@ -147,8 +152,8 @@ public class ErrorHandlingChatDemo : ViewBase
 
         void OnSendMessage(Event<Chat, string> @event)
         {
-            var currentMessages = messages.Value;
-            messages.Set(currentMessages.Add(new ChatMessage(ChatSender.User, @event.Value)));
+            var messagesWithUser = messages.Value.Add(new ChatMessage(ChatSender.User, @event.Value));
+            messages.Set(messagesWithUser);
             
             object response = @event.Value.ToLower() switch
             {
@@ -163,7 +168,7 @@ public class ErrorHandlingChatDemo : ViewBase
                 _ => $"You said: '{@event.Value}'. Try sending 'error', 'warning', 'success', or 'loading'!"
             };
             
-            messages.Set(currentMessages.Add(new ChatMessage(ChatSender.Assistant, response)));
+            messages.Set(messagesWithUser.Add(new ChatMessage(ChatSender.Assistant, response)));
         }
 
         return new Chat(messages.Value.ToArray(), OnSendMessage)
@@ -196,8 +201,8 @@ public class AdvancedChatDemo : ViewBase
 
         void OnSendMessage(Event<Chat, string> @event)
         {
-            var currentMessages = messages.Value;
-            messages.Set(currentMessages.Add(new ChatMessage(ChatSender.User, @event.Value)));
+            var messagesWithUser = messages.Value.Add(new ChatMessage(ChatSender.User, @event.Value));
+            messages.Set(messagesWithUser);
             
             object response = @event.Value.ToLower() switch
             {
@@ -244,7 +249,7 @@ public class AdvancedChatDemo : ViewBase
                 _ => $"You said: '{@event.Value}'. Try the commands: 'analyze code', 'create form', 'show chart', or 'table data'!"
             };
             
-            messages.Set(currentMessages.Add(new ChatMessage(ChatSender.Assistant, response)));
+            messages.Set(messagesWithUser.Add(new ChatMessage(ChatSender.Assistant, response)));
         }
 
         return new Chat(messages.Value.ToArray(), OnSendMessage)
@@ -271,9 +276,10 @@ public class CustomPlaceholderDemo : ViewBase
 
         void OnSendMessage(Event<Chat, string> @event)
         {
-            var currentMessages = messages.Value;
-            messages.Set(currentMessages.Add(new ChatMessage(ChatSender.User, @event.Value)));
-            messages.Set(currentMessages.Add(new ChatMessage(ChatSender.Assistant, $"Thanks for your message: {@event.Value}")));
+            var messagesWithUser = messages.Value.Add(new ChatMessage(ChatSender.User, @event.Value));
+            messages.Set(messagesWithUser);
+            
+            messages.Set(messagesWithUser.Add(new ChatMessage(ChatSender.Assistant, $"Thanks for your message: {@event.Value}")));
         }
 
         return new Chat(messages.Value.ToArray(), OnSendMessage)

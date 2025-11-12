@@ -90,4 +90,8 @@
     <ProjectReference Include="..\Ivy.Filters\Ivy.Filters.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Ivy.DesignSystem" Version="1.1.1" />
+  </ItemGroup>
+
 </Project>

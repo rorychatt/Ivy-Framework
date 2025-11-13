@@ -100,9 +100,13 @@ public static class CardExtensions
         return card.Header(card.Title, Text.Muted(description), card.Icon);
     }
 
-    public static Card Icon(this Card card, Icons? icon)
+    public static Card Icon(this Card card, object? icon)
     {
-        return card.Header(card.Title, card.Description, icon?.ToIcon().Color(Colors.Black));
+        if (icon is Icons iconsValue)
+        {
+            icon = iconsValue.ToIcon().Color(Colors.Black);
+        }
+        return card.Header(card.Title, card.Description, icon);
     }
 
     public static Card BorderThickness(this Card card, int thickness) => card with { BorderThickness = new(thickness) };

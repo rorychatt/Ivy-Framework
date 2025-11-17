@@ -1,12 +1,12 @@
 using Ivy.Core;
+using Ivy.Shared;
 
 // ReSharper disable once CheckNamespace
 namespace Ivy;
 
-/// <summary>Kanban widget displaying structured data in kanban board format with <see cref="KanbanColumn"/> elements supporting pipe operator for easy column addition.</summary>
 public record Kanban : WidgetBase<Kanban>
 {
-    public Kanban(params KanbanColumn[] columns) : base(columns.Cast<object>().ToArray())
+    public Kanban(params KanbanCard[] cards) : base([.. cards.Cast<object>()])
     {
     }
 
@@ -18,11 +18,13 @@ public record Kanban : WidgetBase<Kanban>
 
     [Prop] public bool AllowDelete { get; set; }
 
+    [Prop] public Dictionary<object, Size>? ColumnWidths { get; set; }
+
     [Event] public Func<Event<Kanban, object?>, ValueTask>? OnDelete { get; set; }
 
-    [Event] public Func<Event<Kanban, (object? CardId, object? FromColumn, object? ToColumn, int? TargetIndex)>, ValueTask>? OnMove { get; set; }
+    [Event] public Func<Event<Kanban, (object? CardId, object? ToColumn, int? TargetIndex)>, ValueTask>? OnCardMove { get; set; }
 
-    public static Kanban operator |(Kanban kanban, KanbanColumn child)
+    public static Kanban operator |(Kanban kanban, KanbanCard child)
     {
         return kanban with { Children = [.. kanban.Children, child] };
     }

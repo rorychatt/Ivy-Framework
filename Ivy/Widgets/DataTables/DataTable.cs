@@ -51,7 +51,7 @@ public record DataTable : WidgetBase<DataTable>
 
     [Prop] public DataTableConfig Config { get; set; }
 
-    [Prop] public RowAction[]? RowActions { get; set; }
+    [Prop] public MenuItem[]? RowActions { get; set; }
 
     /// <summary>Called when a cell is clicked (single-click).</summary>
     [Event] public Func<Event<DataTable, CellClickEventArgs>, ValueTask>? OnCellClick { get; set; }

@@ -21,19 +21,19 @@ import { useThemeWithMonitoring } from '@/components/theme-provider';
 import { getSelectionProps } from './utils/selectionModes';
 import { getCellContent as getCellContentUtil } from './utils/cellContent';
 import { convertToGridColumns } from './utils/columnHelpers';
-import { iconCellRenderer } from './utils/customRenderers';
+import { iconCellRenderer, linkCellRenderer } from './utils/customRenderers';
 import { generateHeaderIcons, addStandardIcons } from './utils/headerIcons';
 import { ThemeColors } from '@/lib/color-utils';
 import { useEventHandler } from '@/components/event-handler';
 import { validateLinkUrl, validateRedirectUrl } from '@/lib/utils';
 import { useColumnGroups } from './hooks/useColumnGroups';
 import { RowActionButtons } from './DataTableRowAction';
-import { RowAction } from './types/types';
+import { MenuItem } from '@/types/widgets';
 
 interface TableEditorProps {
   widgetId: string;
   hasOptions?: boolean;
-  rowActions?: RowAction[];
+  rowActions?: MenuItem[];
 }
 
 export const DataTableEditor: React.FC<TableEditorProps> = ({
@@ -238,15 +238,18 @@ export const DataTableEditor: React.FC<TableEditorProps> = ({
   // Handle selection changes
   const handleGridSelectionChange = useCallback(
     (newSelection: GridSelection) => {
-      // Check if the new selection includes URI cells and prevent fuzzy effect
-      // by clearing the selection if it's a single URI cell click
+      // Check if the new selection includes link cells and prevent fuzzy effect
+      // by clearing the selection if it's a single link cell click
       if (newSelection.current !== undefined) {
         const [col, row] = newSelection.current.cell;
         const cellContent = getCellContent([col, row]);
 
-        // If it's a URI cell, don't allow it to be selected (prevents fuzzy effect)
-        if (cellContent.kind === GridCellKind.Uri) {
-          // Clear the selection for URI cells
+        // If it's a link cell, don't allow it to be selected (prevents fuzzy effect)
+        if (
+          cellContent.kind === GridCellKind.Custom &&
+          (cellContent.data as { kind?: string })?.kind === 'link-cell'
+        ) {
+          // Clear the selection for link cells
           setGridSelection({
             columns: CompactSelection.empty(),
             rows: CompactSelection.empty(),
@@ -268,12 +271,13 @@ export const DataTableEditor: React.FC<TableEditorProps> = ({
     (cell: Item, args: GridMouseEventArgs) => {
       const cellContent = getCellContent(cell);
 
-      // Handle Ctrl+Click or Cmd+Click on URI cells
+      // Handle Ctrl+Click or Cmd+Click on custom link cells
       if (
-        cellContent.kind === GridCellKind.Uri &&
-        (args.ctrlKey || args.metaKey)
+        (args.ctrlKey || args.metaKey) &&
+        cellContent.kind === GridCellKind.Custom &&
+        (cellContent.data as { kind?: string })?.kind === 'link-cell'
       ) {
-        const url = cellContent.data as string;
+        const url = (cellContent.data as { url?: string })?.url;
 
         // Validate URL to prevent open redirect vulnerabilities
         const validatedUrl = validateLinkUrl(url);
@@ -287,7 +291,12 @@ export const DataTableEditor: React.FC<TableEditorProps> = ({
           validatedUrl.startsWith('http://') ||
           validatedUrl.startsWith('https://')
         ) {
-          window.open(validatedUrl, '_blank', 'noopener,noreferrer');
+          const newWindow = window.open(
+            validatedUrl,
+            '_blank',
+            'noopener,noreferrer'
+          );
+          newWindow?.focus();
         } else {
           // Internal relative URLs navigate in same tab
           // Validate it's safe for redirect (relative path or same-origin)
@@ -396,7 +405,7 @@ export const DataTableEditor: React.FC<TableEditorProps> = ({
             containerRect.top +
             bounds.height / 2 -
             buttonHeight / 2 -
-            1.5;
+            5;
           setActionButtonsTop(buttonTop);
         }
       }
@@ -448,16 +457,19 @@ export const DataTableEditor: React.FC<TableEditorProps> = ({
 
   // Handle row action button click
   const handleRowActionClick = useCallback(
-    (action: RowAction) => {
+    (action: MenuItem) => {
       if (hoverRow === undefined) return;
 
       const rowData = getRowData(hoverRow);
 
+      // Get action identifier from tag or label
+      const actionId = action.tag?.toString() || action.label || '';
+
       // Send event to backend's OnRowAction event
       eventHandler('OnRowAction', widgetId, [
         {
-          actionId: action.id,
-          eventName: action.eventName,
+          actionId: actionId,
+          eventName: actionId,
           rowIndex: hoverRow,
           rowData: rowData,
         },
@@ -504,7 +516,7 @@ export const DataTableEditor: React.FC<TableEditorProps> = ({
           columns={finalColumns}
           rows={visibleRows}
           getCellContent={getCellContent}
-          customRenderers={[iconCellRenderer]}
+          customRenderers={[iconCellRenderer, linkCellRenderer]}
           headerIcons={headerIcons}
           onColumnResize={allowColumnResizing ? handleColumnResize : undefined}
           onVisibleRegionChanged={handleVisibleRegionChanged}

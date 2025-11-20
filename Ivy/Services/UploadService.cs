@@ -7,34 +7,26 @@ using Ivy.Client;
 using Ivy.Core;
 using Ivy.Core.Hooks;
 using Ivy.Views.Builders;
+using Ivy.Helpers;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Ivy.Services;
 
-/// <summary>
-/// Context for an upload endpoint created by UseUpload, providing the client-facing URL
-/// and a server-side cancel function to abort an in-flight upload by fileId.
-/// </summary>
+/// <summary>Context for an upload endpoint created by UseUpload, providing the client-facing URL and a server-side cancel function to abort an in-flight upload by fileId.</summary>
 public record UploadContext(string UploadUrl, Action<Guid> Cancel)
 {
-    /// <summary>Gets or sets the accepted file types using MIME types or file extensions.</summary>
     public string? Accept { get; init; }
 
-    /// <summary>Gets or sets the maximum file size in bytes.</summary>
     public long? MaxFileSize { get; init; }
 
-    /// <summary>Gets or sets the maximum number of files that can be uploaded.</summary>
     public int? MaxFiles { get; init; }
 }
 
-/// <summary>
-/// Extension methods for configuring UploadContext.
-/// </summary>
+/// <summary>Extension methods for configuring UploadContext.</summary>
 public static class UploadContextExtensions
 {
-    /// <summary>Sets the accepted file types for the upload state using MIME types or file extensions.</summary>
     /// <param name="state">The upload context state to configure.</param>
     /// <param name="accept">A comma-separated list of accepted file types (e.g., "image/*", ".pdf,.doc", "text/plain").</param>
     public static Core.Hooks.IState<UploadContext> Accept(this Core.Hooks.IState<UploadContext> state, string accept)
@@ -43,7 +35,6 @@ public static class UploadContextExtensions
         return state;
     }
 
-    /// <summary>Sets the maximum file size in bytes for the upload state.</summary>
     /// <param name="state">The upload context state to configure.</param>
     /// <param name="maxFileSize">The maximum file size in bytes.</param>
     public static Core.Hooks.IState<UploadContext> MaxFileSize(this Core.Hooks.IState<UploadContext> state, long maxFileSize)
@@ -52,7 +43,6 @@ public static class UploadContextExtensions
         return state;
     }
 
-    /// <summary>Sets the maximum number of files that can be uploaded for the upload state.</summary>
     /// <param name="state">The upload context state to configure.</param>
     /// <param name="maxFiles">The maximum number of files allowed.</param>
     public static Core.Hooks.IState<UploadContext> MaxFiles(this Core.Hooks.IState<UploadContext> state, int maxFiles)
@@ -72,9 +62,7 @@ public enum FileUploadStatus
     Finished
 }
 
-/// <summary>
-/// Common contract for uploaded file metadata used by both generic and non-generic file upload records.
-/// </summary>
+/// <summary>Common contract for uploaded file metadata used by both generic and non-generic file upload records.</summary>
 public interface IFileUpload
 {
     Guid Id { get; }
@@ -85,21 +73,15 @@ public interface IFileUpload
     FileUploadStatus Status { get; set; }
 }
 
-/// <summary>
-/// Represents a file uploaded through a file input control.
-/// </summary>
+/// <summary>Represents a file uploaded through a file input control.</summary>
 public record FileUpload : IFileUpload
 {
-    /// <summary>Gets the identifier for this file upload, set by the server.</summary>
     public Guid Id { get; init; }
 
-    /// <summary>Gets the name of the uploaded file including its extension.</summary>
     public string FileName { get; init; } = string.Empty;
 
-    /// <summary>Gets the MIME type of the uploaded file.</summary>
     public string ContentType { get; init; } = string.Empty;
 
-    /// <summary>Gets the size of the uploaded file in bytes.</summary>
     public long Length { get; init; }
 
     /// <summary>
@@ -113,9 +95,7 @@ public record FileUpload : IFileUpload
     public FileUploadStatus Status { get; set; } = FileUploadStatus.Pending;
 }
 
-/// <summary>
-/// Generic variant of FileUpload allowing an associated typed payload to be tracked alongside the upload metadata.
-/// </summary>
+/// <summary>Generic variant of FileUpload allowing an associated typed payload to be tracked alongside the upload metadata.</summary>
 /// <typeparam name="T">The type of the associated payload.</typeparam>
 public record FileUpload<T> : FileUpload
 {
@@ -135,9 +115,6 @@ public record FileUpload<T> : FileUpload
     }
 }
 
-/// <summary>
-/// Interface for handling file uploads with custom logic.
-/// </summary>
 public interface IUploadHandler
 {
     /// <summary>
@@ -170,17 +147,10 @@ public static class FileUploadExtensions
     }
 }
 
-/// <summary>
-/// Delegate for handling file uploads with stream and cancellation support.
-/// </summary>
+/// <summary>Delegate for handling file uploads with stream and cancellation support.</summary>
 public delegate Task UploadDelegate(FileUpload fileUpload, Stream stream, CancellationToken cancellationToken);
 
 
-/// <summary>
-/// Interface for managing file upload state.
-/// Sinks are simple state controllers that update FileUpload state for single or multiple files.
-/// Cleanup logic should be handled by the upload handler, not the sink.
-/// </summary>
 public interface IFileUploadSink<in TContent>
 {
     Guid Start(FileUpload file);
@@ -320,8 +290,8 @@ public sealed class MultipleFileSink<T>(IState<ImmutableArray<FileUpload<T>>> st
 }
 
 [ApiController]
-[Route("upload")]
-public class UploadController(AppSessionStore sessionStore) : Controller
+[Route("ivy/upload")]
+public class UploadController(AppSessionStore sessionStore, Server server) : Controller
 {
     [HttpPost("{connectionId}/{uploadId}")]
     [Consumes("multipart/form-data")]
@@ -331,16 +301,23 @@ public class UploadController(AppSessionStore sessionStore) : Controller
         {
             return BadRequest("connectionId is required.");
         }
+        if (!sessionStore.Sessions.TryGetValue(connectionId, out var session))
+        {
+            return NotFound($"Session for connectionId '{connectionId}' not found.");
+        }
+
+        if (await this.ValidateAuthIfRequired(server, session.AppServices) is { } errorResult)
+        {
+            return errorResult;
+        }
+
         if (string.IsNullOrEmpty(uploadId))
         {
             return BadRequest("uploadId is required.");
         }
-        if (sessionStore.Sessions.TryGetValue(connectionId, out var session))
-        {
-            var uploadService = session.AppServices.GetRequiredService<IUploadService>();
-            return await uploadService.Upload(uploadId, file);
-        }
-        return NotFound($"Session for connectionId '{connectionId}' not found.");
+
+        var uploadService = session.AppServices.GetRequiredService<IUploadService>();
+        return await uploadService.Upload(uploadId, file);
     }
 }
 
@@ -361,7 +338,7 @@ public class UploadService(string connectionId, IClientProvider clientProvider) 
             upload.cts?.Dispose();
         });
 
-        return (cleanup, $"/upload/{connectionId}/{uploadId}");
+        return (cleanup, $"/ivy/upload/{connectionId}/{uploadId}");
     }
 
     public (IDisposable cleanup, string url) AddUpload(UploadDelegate handler, Func<(string? accept, long? maxFileSize)> getValidation, string? defaultContentType = null, string? defaultFileName = null)
@@ -376,7 +353,7 @@ public class UploadService(string connectionId, IClientProvider clientProvider) 
             upload.cts?.Dispose();
         });
 
-        return (cleanup, $"/upload/{connectionId}/{uploadId}");
+        return (cleanup, $"/ivy/upload/{connectionId}/{uploadId}");
     }
 
     public async Task<IActionResult> Upload(string uploadId, IFormFile file)

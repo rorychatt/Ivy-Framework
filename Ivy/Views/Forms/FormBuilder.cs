@@ -16,14 +16,6 @@ namespace Ivy.Views.Forms;
 /// <typeparam name="TModel">Type of model object that form is bound to.</typeparam>
 public class FormBuilderField<TModel>
 {
-    /// <summary>Initializes form builder field with specified configuration and metadata.</summary>
-    /// <param name="name">Name of field, typically matching property or field name in model.</param>
-    /// <param name="label">Display label for field, automatically formatted from field name.</param>
-    /// <param name="order">Initial order position for field in form layout.</param>
-    /// <param name="inputFactory">Optional factory function to create input control for this field.</param>
-    /// <param name="fieldInfo">Reflection information for field if it represents class field.</param>
-    /// <param name="propertyInfo">Reflection information for property if it represents class property.</param>
-    /// <param name="required">Whether field is required and should have validation applied.</param>
     public FormBuilderField(
         string name,
         string label,
@@ -70,55 +62,40 @@ public class FormBuilderField<TModel>
 
     //public Func<Control, object> Helper { get; set; }
 
-    /// <summary>Visibility predicate determining whether field should be displayed based on current model state.</summary>
     public Func<TModel, bool> Visible { get; set; }
 
     //public List<(EditorField<T> field, Func<T, object> transformer)> Dependencies = new();
 
-    /// <summary>Name of field, typically matching property or field name in model.</summary>
     public string Name { get; set; }
 
     private FieldInfo? FieldInfo { get; set; }
 
     private PropertyInfo? PropertyInfo { get; set; }
 
-    /// <summary>Type of field or property that this form field represents.</summary>
     public Type Type => (FieldInfo?.FieldType ?? PropertyInfo?.PropertyType)!;
 
-    /// <summary>Whether field should be disabled (read-only) in form. Defaults to true.</summary>
     public bool Disabled { get; set; } = true;
 
-    /// <summary>Order position of field within its column and group. Lower values appear first.</summary>
     public int Order { get; set; }
 
-    /// <summary>Column index for multi-column form layouts.</summary>
     public int Column { get; set; }
 
-    /// <summary>Unique identifier for row containing this field.</summary>
     public Guid RowKey { get; set; }
 
-    /// <summary>Group name for organizing related fields together.</summary>
     public string? Group { get; set; }
 
-    /// <summary>Display label for field shown to users.</summary>
     public string Label { get; set; }
 
-    /// <summary>Optional description text providing additional context for field.</summary>
     public string? Description { get; set; }
 
-    /// <summary>Optional help text displayed as tooltip on info icon next to label.</summary>
     public string? Help { get; set; }
 
-    /// <summary>Factory function creating input control for this field with access to view context.</summary>
     public Func<IAnyState, IViewContext, IAnyInput>? InputFactory { get; set; }
 
-    /// <summary>Whether field has been removed from form and should not be rendered.</summary>
     public bool Removed { get; set; }
 
-    /// <summary>Whether field is required and must have value for form submission.</summary>
     public bool Required { get; set; }
 
-    /// <summary>Collection of validation functions applied to this field's value.</summary>
     public List<Func<object?, (bool, string)>> Validators { get; set; } = new();
 }
 
@@ -130,19 +107,14 @@ public class FormBuilder<TModel> : ViewBase
 
     private readonly IState<TModel> _model;
 
-    /// <summary>The text displayed on the form's submit button.</summary>
     public readonly string SubmitTitle;
     private readonly List<string> _groups = [];
+    private readonly Dictionary<string, bool> _groupOpenStates = [];
 
-    /// <summary>The validation strategy for form fields. Default is OnBlur.</summary>
     public FormValidationStrategy ValidationStrategy { get; set; } = FormValidationStrategy.OnBlur;
 
-    /// <summary>The size of the form affecting spacing between fields. Default is Medium.</summary>
     public Sizes Size { get; set; } = Sizes.Medium;
 
-    /// <summary>Initializes form builder for specified model state with automatic field scaffolding.</summary>
-    /// <param name="model">Reactive state containing model object to be edited by form.</param>
-    /// <param name="submitTitle">The text displayed on the form's submit button. Default is "Save".</param>
     public FormBuilder(IState<TModel> model, string submitTitle = "Save")
     {
         _model = model;
@@ -300,7 +272,6 @@ public class FormBuilder<TModel> : ViewBase
         return null;
     }
 
-    /// <summary>Configures custom input factory for specified field (convenience overload without view context).</summary>
     /// <param name="field">Expression identifying field to configure.</param>
     /// <param name="factory">Input factory function to use for creating input control.</param>
     /// <returns>Form builder instance for method chaining.</returns>
@@ -309,7 +280,6 @@ public class FormBuilder<TModel> : ViewBase
         return Builder(field, (state, _) => factory(state));
     }
 
-    /// <summary>Configures custom input factory for specified field with automatic scaffolding wrapper.</summary>
     /// <param name="field">Expression identifying field to configure.</param>
     /// <param name="factory">Input factory function that receives both state and view context.</param>
     /// <returns>Form builder instance for method chaining.</returns>
@@ -348,7 +318,6 @@ public class FormBuilder<TModel> : ViewBase
         return this;
     }
 
-    /// <summary>Configures custom input factory for all fields of specified type (convenience overload without view context).</summary>
     /// <typeparam name="TU">Type of fields to configure.</typeparam>
     /// <param name="input">Input factory function to use for all fields of this type.</param>
     /// <returns>Form builder instance for method chaining.</returns>
@@ -357,7 +326,6 @@ public class FormBuilder<TModel> : ViewBase
         return Builder<TU>((state, _) => input(state));
     }
 
-    /// <summary>Configures custom input factory for all fields of specified type.</summary>
     /// <typeparam name="TU">Type of fields to configure.</typeparam>
     /// <param name="input">Input factory function that receives both state and view context.</param>
     /// <returns>Form builder instance for method chaining.</returns>
@@ -446,12 +414,17 @@ public class FormBuilder<TModel> : ViewBase
     /// <param name="row">True to arrange fields side-by-side in the same row; false to stack vertically.</param>
     /// <param name="fields">Fields to arrange. When row is true, fields will be distributed evenly across the row width.</param>
     /// <returns>Form builder instance for method chaining.</returns>
+    [Obsolete("Use PlaceHorizontal")]
     public FormBuilder<TModel> Place(bool row, params Expression<Func<TModel, object>>[] fields)
     {
         return _Place(0, row ? Guid.NewGuid() : null, fields);
     }
 
-    /// <summary>Places specified fields in a specific column, optionally arranging them horizontally side-by-side.</summary>
+    public FormBuilder<TModel> PlaceHorizontal(params Expression<Func<TModel, object>>[] fields)
+    {
+        return _Place(0, Guid.NewGuid(), fields);
+    }
+
     /// <param name="col">Zero-based column index where fields should be placed.</param>
     /// <param name="row">True to arrange fields side-by-side in the same row; false to stack vertically in the column.</param>
     /// <param name="fields">Fields to place in the specified column. When row is true, fields will share the same row.</param>
@@ -461,12 +434,22 @@ public class FormBuilder<TModel> : ViewBase
         return _Place(col, row ? Guid.NewGuid() : null, fields);
     }
 
-    /// <summary>Groups specified fields under named section in specified column.</summary>
-    /// <param name="group">Name of group for organizing related fields.</param>
-    /// <param name="column">Column index where grouped fields should be placed.</param>
-    /// <param name="fields">Fields to include in named group.</param>
-    /// <returns>Form builder instance for method chaining.</returns>
+    public FormBuilder<TModel> Group(string group, params Expression<Func<TModel, object>>[] fields)
+    {
+        return Group(group, 0, false, fields);
+    }
+
+    public FormBuilder<TModel> Group(string group, bool open, params Expression<Func<TModel, object>>[] fields)
+    {
+        return Group(group, 0, open, fields);
+    }
+
     public FormBuilder<TModel> Group(string group, int column, params Expression<Func<TModel, object>>[] fields)
+    {
+        return Group(group, column, false, fields);
+    }
+
+    public FormBuilder<TModel> Group(string group, int column, bool open, params Expression<Func<TModel, object>>[] fields)
     {
         int order = 0;
 
@@ -474,6 +457,8 @@ public class FormBuilder<TModel> : ViewBase
         {
             _groups.Add(group);
         }
+
+        _groupOpenStates[group] = open;
 
         foreach (var expr in fields)
         {
@@ -485,16 +470,6 @@ public class FormBuilder<TModel> : ViewBase
         return this;
     }
 
-    /// <summary>Groups specified fields under named section in first column.</summary>
-    /// <param name="group">Name of group for organizing related fields.</param>
-    /// <param name="fields">Fields to include in named group.</param>
-    /// <returns>Form builder instance for method chaining.</returns>
-    public FormBuilder<TModel> Group(string group, params Expression<Func<TModel, object>>[] fields)
-    {
-        return Group(group, 0, fields);
-    }
-
-    /// <summary>Removes specified fields from form so they will not be rendered.</summary>
     /// <param name="fields">Fields to remove from form.</param>
     /// <returns>Form builder instance for method chaining.</returns>
     public FormBuilder<TModel> Remove(params Expression<Func<TModel, object>>[] fields)
@@ -507,7 +482,6 @@ public class FormBuilder<TModel> : ViewBase
         return this;
     }
 
-    /// <summary>Adds previously removed field back to form.</summary>
     /// <param name="field">Field to add back to form.</param>
     /// <returns>Form builder instance for method chaining.</returns>
     public FormBuilder<TModel> Add(Expression<Func<TModel, object>> field)
@@ -517,7 +491,6 @@ public class FormBuilder<TModel> : ViewBase
         return this;
     }
 
-    /// <summary>Removes all fields from form, creating blank form that can be selectively populated.</summary>
     /// <returns>Form builder instance for method chaining.</returns>
     public FormBuilder<TModel> Clear()
     {
@@ -569,7 +542,6 @@ public class FormBuilder<TModel> : ViewBase
         return this;
     }
 
-    /// <summary>Adds custom validation rule to specified field.</summary>
     /// <typeparam name="T">Type of field value for type-safe validation.</typeparam>
     /// <param name="field">Field to add validation to.</param>
     /// <param name="validator">Function validating field value and returning result and error message.</param>
@@ -595,7 +567,6 @@ public class FormBuilder<TModel> : ViewBase
         return this;
     }
 
-    /// <summary>Sets the size of the form affecting spacing between fields.</summary>
     /// <param name="size">The size of the form (Small, Medium, Large).</param>
     /// <returns>Form builder instance for method chaining.</returns>
     internal FormBuilder<TModel> SetSize(Sizes size)
@@ -643,7 +614,6 @@ public class FormBuilder<TModel> : ViewBase
         return Expression.Lambda<Func<TModel, object>>(converted, parameter);
     }
 
-    /// <summary>Creates form instance with validation, data binding, and submission handling for use in custom layouts.</summary>
     /// <param name="context">View context for state management and signal handling.</param>
     /// <returns>Tuple containing submit handler, form view, validation view, and loading state.</returns>
     public (Func<Task<bool>> onSubmit, IView formView, IView validationView, bool loading) UseForm(IViewContext context)
@@ -703,7 +673,8 @@ public class FormBuilder<TModel> : ViewBase
         var formView = new FormView<TModel>(
             fieldViews,
             HandleSubmitEvent,
-            Size
+            Size,
+            _groupOpenStates
         );
 
         var validationView = new WrapperView(Layout.Vertical(
@@ -717,7 +688,6 @@ public class FormBuilder<TModel> : ViewBase
         return (OnSubmit, formView, validationView, false);
     }
 
-    /// <summary>Builds complete form with automatic layout, validation, and submission handling.</summary>
     /// <returns>Complete form widget with fields, validation messages, and submit button.</returns>
     public override object? Build()
     {

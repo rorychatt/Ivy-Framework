@@ -49,7 +49,7 @@ tasks.ToKanban(
 
 ## Drag and Drop
 
-Enable drag-and-drop functionality by providing a `HandleMove` handler. Users can drag cards between columns to update their status:
+Enable drag-and-drop functionality by providing a `HandleCardMove` handler. Users can drag cards between columns to update their status:
 
 ```csharp demo-tabs
 public class KanbanWithMoveExample : ViewBase
@@ -78,7 +78,7 @@ public class KanbanWithMoveExample : ViewBase
                 idSelector: t => t.Id,
                 titleSelector: t => t.Title,
                 descriptionSelector: t => t.Description)
-            .HandleMove(moveData =>
+            .HandleCardMove(moveData =>
             {
                 var taskId = moveData.CardId?.ToString();
                 var updatedTasks = taskState.Value.ToList();
@@ -97,12 +97,95 @@ public class KanbanWithMoveExample : ViewBase
 }
 ```
 
-## Card Click Events
+## Custom Card Content
 
-Handle card click events by providing a `HandleClick` handler. This is useful for opening task details, showing modals, navigating to detail pages, or performing any other action when a user clicks on a card:
+Customize card appearance beyond the default title and description using `.CardBuilder()`. This allows you to create rich, custom card layouts with additional fields, formatting, or widgets:
 
 ```csharp demo-tabs
-public class KanbanWithClickExample : ViewBase
+public class KanbanWithCustomCardsExample : ViewBase
+{
+    public class Task
+    {
+        public required string Id { get; set; }
+        public required string Title { get; set; }
+        public required string Status { get; set; }
+        public required int Priority { get; set; }
+        public required string Description { get; set; }
+        public required string Assignee { get; set; }
+    }
+    
+    private static int GetStatusOrder(string status) => status switch
+    {
+        "Todo" => 1,
+        "In Progress" => 2,
+        "Done" => 3,
+        _ => 0
+    };
+    
+    public override object? Build()
+    {
+        var tasks = UseState(new[]
+        {
+            new Task { Id = "1", Title = "Design Homepage", Status = "Todo", Priority = 2, Description = "Create wireframes and mockups", Assignee = "Alice" },
+            new Task { Id = "2", Title = "Setup Database", Status = "Todo", Priority = 1, Description = "Configure PostgreSQL instance", Assignee = "Bob" },
+            new Task { Id = "3", Title = "Build API", Status = "In Progress", Priority = 1, Description = "Create REST endpoints", Assignee = "Alice" },
+            new Task { Id = "4", Title = "Write Tests", Status = "In Progress", Priority = 2, Description = "Unit and integration tests", Assignee = "Bob" },
+            new Task { Id = "5", Title = "Deploy to Production", Status = "Done", Priority = 1, Description = "Configure CI/CD pipeline", Assignee = "Charlie" },
+        });
+
+        return tasks.Value
+            .ToKanban(
+                groupBySelector: e => e.Status,
+                idSelector: e => e.Id,
+                titleSelector: e => e.Title,
+                descriptionSelector: e => e.Description)
+            .CardBuilder(factory => factory.Func<Task, Task>(task => new Card(
+                content: task.ToDetails()
+                    .Remove(x => x.Id)
+                    .MultiLine(x => x.Description)
+            )))
+            .ColumnOrder(e => GetStatusOrder(e.Status))
+            .Width(e => e.Status, Size.Fraction(0.33f))
+            .HandleCardMove(moveData =>
+            {
+                var taskId = moveData.CardId?.ToString();
+                if (string.IsNullOrEmpty(taskId)) return;
+
+                var updatedTasks = tasks.Value.ToList();
+                var taskToMove = updatedTasks.FirstOrDefault(t => t.Id == taskId);
+                if (taskToMove == null) return;
+
+                taskToMove = new Task
+                {
+                    Id = taskToMove.Id,
+                    Title = taskToMove.Title,
+                    Status = moveData.ToColumn,
+                    Priority = taskToMove.Priority,
+                    Description = taskToMove.Description,
+                    Assignee = taskToMove.Assignee
+                };
+
+                updatedTasks.RemoveAll(t => t.Id == taskId);
+                updatedTasks.Add(taskToMove);
+                tasks.Set(updatedTasks.ToArray());
+            })
+            .HandleClick(cardId =>
+            {
+                var taskId = cardId?.ToString();
+                // Handle card click - show details, open modal, etc.
+            });
+    }
+}
+```
+
+The `.CardBuilder()` method accepts a builder factory function that creates a custom card widget. You can use `.ToDetails()` to automatically generate a details view from your model, or create completely custom card layouts with any widgets you need.
+
+## Card Click Events
+
+Handle card click interactions by providing a `HandleClick` handler. This enables opening detail views, modals, or navigating to specific pages when users click on cards:
+
+```csharp demo-tabs
+public class KanbanWithAllEventsExample : ViewBase
 {
     record Task(string Id, string Title, string Status, int Priority, string Description, string Assignee);
     
@@ -132,26 +215,38 @@ public class KanbanWithClickExample : ViewBase
                 descriptionSelector: t => t.Description)
             .HandleClick(cardId =>
             {
+                // Handle card click - show details, open modal, navigate, etc.
                 var taskId = cardId?.ToString();
                 var clickedTask = taskState.Value.FirstOrDefault(t => t.Id == taskId);
                 if (clickedTask != null)
                 {
-                    client.Toast($"Clicked: {clickedTask.Title}");
+                    client.Toast($"Clicked: {clickedTask.Title} - {clickedTask.Description}");
                 }
             })
-            .HandleMove(moveData =>
+            .HandleCardMove(moveData =>
             {
+                // Update task status when card is moved between columns
                 var taskId = moveData.CardId?.ToString();
                 var updatedTasks = taskState.Value.ToList();
                 var taskToMove = updatedTasks.FirstOrDefault(t => t.Id == taskId);
                 
                 if (taskToMove != null)
                 {
-                    // Update task status to match new column
                     var updated = taskToMove with { Status = moveData.ToColumn };
                     updatedTasks.RemoveAll(t => t.Id == taskId);
                     updatedTasks.Add(updated);
                     taskState.Set(updatedTasks.ToArray());
+                }
+            })
+            .HandleDelete(cardId =>
+            {
+                // Remove task when delete action is triggered
+                var taskId = cardId?.ToString();
+                var taskToDelete = taskState.Value.FirstOrDefault(t => t.Id == taskId);
+                if (taskToDelete != null)
+                {
+                    taskState.Set(taskState.Value.Where(t => t.Id != taskId).ToArray());
+                    client.Toast($"Deleted: {taskToDelete.Title}");
                 }
             });
     }
@@ -179,14 +274,6 @@ public class FullKanbanExample : ViewBase
         _ => 0
     };
     
-    string GetColumnTitle(string status) => status switch
-    {
-        "Todo" => "To Do",
-        "In Progress" => "In Progress",
-        "Done" => "Completed",
-        _ => status
-    };
-    
     public override object? Build()
     {
         var taskState = UseState(new[]
@@ -211,21 +298,8 @@ public class FullKanbanExample : ViewBase
                 descriptionSelector: t => t.Description,
                 orderSelector: t => t.Priority)
             .ColumnOrder(t => t.ColumnOrder)
-            .ColumnTitle(GetColumnTitle)
-            .HandleAdd(columnKey =>
-            {
-                var newTask = new Task(
-                    Id: Guid.NewGuid().ToString(),
-                    Title: "New Task",
-                    Status: columnKey,
-                    Priority: taskState.Value.Count(t => t.Status == columnKey) + 1,
-                    Description: "Add task description",
-                    Assignee: "Unassigned",
-                    ColumnOrder: GetColumnOrder(columnKey)
-                );
-                taskState.Set(taskState.Value.Append(newTask).ToArray());
-            })
-            .HandleMove(moveData =>
+            .Height(Size.Units(400))
+            .HandleCardMove(moveData =>
             {
                 var taskId = moveData.CardId?.ToString();
                 var updatedTasks = taskState.Value.ToList();
@@ -252,9 +326,7 @@ public class FullKanbanExample : ViewBase
                 new Card()
                     .Title("No Tasks")
                     .Description("Create your first task to get started")
-            )
-            .Width(Size.Full())
-            .Height(Size.Full());
+            );
     }
 }
 ```
@@ -294,7 +366,7 @@ public class SimpleStatusBoard : ViewBase
             idSelector: i => i.Id,
             titleSelector: i => i.Title,
             descriptionSelector: i => i.Id
-        ).HandleMove(moveData =>
+        ).HandleCardMove(moveData =>
         {
             var issueId = moveData.CardId?.ToString();
             var updatedIssues = issueState.Value.ToList();

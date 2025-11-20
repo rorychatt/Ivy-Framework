@@ -14,6 +14,8 @@ import {
   createNumberCell,
   createBooleanCell,
   createTextCell,
+  createLabelsCell,
+  createLinkCell,
   getOrderedColumns,
   getCellContent,
   getContentAlign,
@@ -162,6 +164,20 @@ describe('cellContent utilities', () => {
   });
 
   describe('parseDateValue', () => {
+    it('should parse Date objects directly (from Arrow Timestamp vectors)', () => {
+      const date = new Date('2025-10-13T14:30:00.000Z');
+      const result = parseDateValue(date);
+      expect(result).toBeInstanceOf(Date);
+      expect(result).toBe(date); // Should return the same Date object
+      expect(result?.getTime()).toBe(date.getTime());
+    });
+
+    it('should return null for invalid Date objects', () => {
+      const invalidDate = new Date('invalid');
+      const result = parseDateValue(invalidDate);
+      expect(result).toBeNull();
+    });
+
     it('should parse numeric timestamp', () => {
       const timestamp = Date.now();
       const result = parseDateValue(timestamp);
@@ -190,6 +206,16 @@ describe('cellContent utilities', () => {
   });
 
   describe('createDateCell', () => {
+    it('should create a date cell from Date object (Arrow Timestamp)', () => {
+      const date = new Date('2025-10-13T14:30:00.000Z');
+      const cell = createDateCell(date, 'datetime', true);
+      expect(cell).not.toBeNull();
+      if (cell && cell.kind === GridCellKind.Text) {
+        expect(cell.allowOverlay).toBe(true);
+        expect(cell.displayData).toBe(date.toLocaleString());
+      }
+    });
+
     it('should create a date cell from timestamp', () => {
       const timestamp = new Date('2025-10-13T00:00:00.000Z').getTime();
       const cell = createDateCell(timestamp, 'date', true);
@@ -293,6 +319,55 @@ describe('cellContent utilities', () => {
         expect(cell.data).toBe('123');
         expect(cell.displayData).toBe('123');
         expect(cell.readonly).toBe(true);
+      }
+    });
+  });
+
+  describe('createLinkCell', () => {
+    it('should create a custom link cell for external URL', () => {
+      const url = 'https://example.com';
+      const cell = createLinkCell(url, false);
+      expect(cell.kind).toBe(GridCellKind.Custom);
+      if (cell.kind === GridCellKind.Custom) {
+        const linkData = cell.data as { kind: string; url: string };
+        expect(linkData.kind).toBe('link-cell');
+        expect(linkData.url).toBe(url);
+        expect(cell.allowOverlay).toBe(false);
+        expect(cell.readonly).toBe(true);
+        expect(cell.copyData).toBe(url);
+      }
+    });
+
+    it('should create a custom link cell for internal app:// link', () => {
+      const url = 'app://concepts/links-app';
+      const cell = createLinkCell(url, false);
+      expect(cell.kind).toBe(GridCellKind.Custom);
+      if (cell.kind === GridCellKind.Custom) {
+        const linkData = cell.data as { kind: string; url: string };
+        expect(linkData.kind).toBe('link-cell');
+        expect(linkData.url).toBe(url);
+      }
+    });
+
+    it('should create readonly custom link cell (links are always readonly to prevent overlay issues)', () => {
+      const url = 'https://github.com/user/repo';
+      const cell = createLinkCell(url, true);
+      if (cell.kind === GridCellKind.Custom) {
+        expect(cell.allowOverlay).toBe(false);
+        expect(cell.readonly).toBe(true);
+      }
+    });
+
+    it('should respect alignment parameter', () => {
+      const url = 'https://example.com';
+      const cell = createLinkCell(url, false, Align.Center);
+      if (cell.kind === GridCellKind.Custom) {
+        const linkData = cell.data as {
+          kind: string;
+          url: string;
+          align?: string;
+        };
+        expect(linkData.align).toBe('center');
       }
     });
   });
@@ -481,6 +556,37 @@ describe('cellContent utilities', () => {
       }
     });
 
+    it('should handle Link type from metadata', () => {
+      const linkColumns: DataColumn[] = [
+        { name: 'url_col', type: ColType.Link, width: 200 },
+      ];
+
+      const linkData: DataRow[] = [
+        { values: ['https://example.com'] },
+        { values: ['app://concepts/links-app'] },
+      ];
+
+      // Test external URL
+      const cell1 = getCellContent([0, 0], linkData, linkColumns, [], false);
+      expect(cell1.kind).toBe(GridCellKind.Custom);
+      if (cell1.kind === GridCellKind.Custom) {
+        const linkData1 = cell1.data as { kind: string; url: string };
+        expect(linkData1.kind).toBe('link-cell');
+        expect(linkData1.url).toBe('https://example.com');
+        expect(cell1.copyData).toBe('https://example.com');
+        expect(cell1.readonly).toBe(true);
+      }
+
+      // Test internal app:// link
+      const cell2 = getCellContent([0, 1], linkData, linkColumns, [], false);
+      expect(cell2.kind).toBe(GridCellKind.Custom);
+      if (cell2.kind === GridCellKind.Custom) {
+        const linkData2 = cell2.data as { kind: string; url: string };
+        expect(linkData2.kind).toBe('link-cell');
+        expect(linkData2.url).toBe('app://concepts/links-app');
+      }
+    });
+
     it('should handle editable=false', () => {
       const cell = getCellContent([0, 0], data, columns, [], false);
       if (cell.kind === GridCellKind.Text) {
@@ -571,6 +677,131 @@ describe('cellContent utilities', () => {
         true
       );
       expect(rightCell.contentAlign).toBe('right');
+    });
+  });
+
+  describe('createLabelsCell', () => {
+    it('should create a bubble cell from an array of strings', () => {
+      const cell = createLabelsCell(['Tag1', 'Tag2', 'Tag3']);
+      expect(cell.kind).toBe(GridCellKind.Bubble);
+      if (cell.kind === GridCellKind.Bubble) {
+        expect(cell.data).toEqual(['Tag1', 'Tag2', 'Tag3']);
+        expect(cell.allowOverlay).toBe(false);
+      }
+    });
+
+    it('should create a bubble cell from a comma-separated string', () => {
+      const cell = createLabelsCell('Red, Green, Blue');
+      expect(cell.kind).toBe(GridCellKind.Bubble);
+      if (cell.kind === GridCellKind.Bubble) {
+        expect(cell.data).toEqual(['Red', 'Green', 'Blue']);
+      }
+    });
+
+    it('should handle comma-separated string with extra spaces', () => {
+      const cell = createLabelsCell('  Tag1  ,  Tag2  ,  Tag3  ');
+      if (cell.kind === GridCellKind.Bubble) {
+        expect(cell.data).toEqual(['Tag1', 'Tag2', 'Tag3']);
+      }
+    });
+
+    it('should create a bubble cell from a single string value', () => {
+      const cell = createLabelsCell('SingleTag');
+      if (cell.kind === GridCellKind.Bubble) {
+        expect(cell.data).toEqual(['SingleTag']);
+      }
+    });
+
+    it('should handle empty array', () => {
+      const cell = createLabelsCell([]);
+      if (cell.kind === GridCellKind.Bubble) {
+        expect(cell.data).toEqual([]);
+      }
+    });
+
+    it('should handle null and undefined values in array', () => {
+      const cell = createLabelsCell(['Tag1', null, 'Tag2', undefined, 'Tag3']);
+      if (cell.kind === GridCellKind.Bubble) {
+        expect(cell.data).toEqual(['Tag1', 'Tag2', 'Tag3']);
+      }
+    });
+
+    it('should handle null input', () => {
+      const cell = createLabelsCell(null);
+      if (cell.kind === GridCellKind.Bubble) {
+        expect(cell.data).toEqual([]);
+      }
+    });
+
+    it('should handle undefined input', () => {
+      const cell = createLabelsCell(undefined);
+      if (cell.kind === GridCellKind.Bubble) {
+        expect(cell.data).toEqual([]);
+      }
+    });
+
+    it('should convert non-string array values to strings', () => {
+      const cell = createLabelsCell([123, true, 'text']);
+      if (cell.kind === GridCellKind.Bubble) {
+        expect(cell.data).toEqual(['123', 'true', 'text']);
+      }
+    });
+
+    it('should apply alignment when provided', () => {
+      const cell = createLabelsCell(['Tag1', 'Tag2'], Align.Center);
+      expect(cell.contentAlign).toBe('center');
+    });
+
+    it('should filter out empty strings from comma-separated input', () => {
+      const cell = createLabelsCell('Tag1,  ,Tag2,,Tag3,');
+      if (cell.kind === GridCellKind.Bubble) {
+        expect(cell.data).toEqual(['Tag1', 'Tag2', 'Tag3']);
+      }
+    });
+  });
+
+  describe('getCellContent with Labels type', () => {
+    it('should create labels cell for Labels column type with array value', () => {
+      const labelsColumns: DataColumn[] = [
+        { name: 'tags', type: ColType.Labels, width: 200 },
+      ];
+
+      const labelsData: DataRow[] = [
+        { values: [['Important', 'Urgent', 'Review']] },
+      ];
+
+      const cell = getCellContent([0, 0], labelsData, labelsColumns, [], true);
+      expect(cell.kind).toBe(GridCellKind.Bubble);
+      if (cell.kind === GridCellKind.Bubble) {
+        expect(cell.data).toEqual(['Important', 'Urgent', 'Review']);
+      }
+    });
+
+    it('should create labels cell for Labels column type with string value', () => {
+      const labelsColumns: DataColumn[] = [
+        { name: 'categories', type: ColType.Labels, width: 200 },
+      ];
+
+      const labelsData: DataRow[] = [
+        { values: ['Bug, Feature, Documentation'] },
+      ];
+
+      const cell = getCellContent([0, 0], labelsData, labelsColumns, [], true);
+      expect(cell.kind).toBe(GridCellKind.Bubble);
+      if (cell.kind === GridCellKind.Bubble) {
+        expect(cell.data).toEqual(['Bug', 'Feature', 'Documentation']);
+      }
+    });
+
+    it('should respect alignment for Labels column type', () => {
+      const labelsColumns: DataColumn[] = [
+        { name: 'tags', type: ColType.Labels, width: 200, align: Align.Right },
+      ];
+
+      const labelsData: DataRow[] = [{ values: [['Tag1', 'Tag2']] }];
+
+      const cell = getCellContent([0, 0], labelsData, labelsColumns, [], true);
+      expect(cell.contentAlign).toBe('right');
     });
   });
 });

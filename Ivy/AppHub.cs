@@ -31,7 +31,7 @@ public class AppHub(
     private static bool GetChromeParam(HttpContext httpContext)
     {
         bool chrome = true;
-        if (httpContext!.Request.Query.TryGetValue("chrome", out var chromeParam))
+        if (httpContext.Request.Query.TryGetValue("chrome", out var chromeParam))
         {
             chrome = !chromeParam.ToString().Equals("false", StringComparison.InvariantCultureIgnoreCase);
         }
@@ -39,10 +39,8 @@ public class AppHub(
         return chrome;
     }
 
-    public static (string AppId, string? NavigationAppId) GetAppId(Server server, HttpContext httpContext)
+    public static (string? AppId, string? NavigationAppId) GetAppId(Server server, HttpContext httpContext, bool chrome)
     {
-        bool chrome = GetChromeParam(httpContext);
-
         string? appId = null;
         string? navigationAppId = null;
 
@@ -54,19 +52,17 @@ public class AppHub(
                 id = null;
             }
 
-            if (chrome)
+            if (id == server.AppRepository.GetAppOrDefault(id).Id)
             {
-                navigationAppId = id;
+                if (chrome)
+                {
+                    navigationAppId = id;
+                }
+                else
+                {
+                    appId = id;
+                }
             }
-            else
-            {
-                appId = id;
-            }
-        }
-
-        if (string.IsNullOrEmpty(appId))
-        {
-            appId = server.DefaultAppId ?? server.AppRepository.GetAppOrDefault(null).Id;
         }
 
         return (appId, navigationAppId);
@@ -111,7 +107,10 @@ public class AppHub(
             var appServices = new ServiceCollection();
 
             var httpContext = Context.GetHttpContext()!;
-            var (appId, navigationAppId) = GetAppId(server, httpContext);
+
+            var chrome = GetChromeParam(httpContext);
+            var parentId = GetParentId(httpContext);
+            var (appId, navigationAppId) = GetAppId(server, httpContext, chrome);
 
             var clientProvider = new ClientProvider(new ClientSender(clientNotifier, Context.ConnectionId));
 
@@ -137,7 +136,7 @@ public class AppHub(
                 var authProvider = server.Services.BuildServiceProvider().GetService<IAuthProvider>() ?? throw new Exception("IAuthProvider not found");
                 authProvider.SetHttpContext(httpContext);
 
-                var oldAuthToken = GetAuthToken(httpContext);
+                var oldAuthToken = AuthHelper.GetAuthToken(httpContext);
                 var authService = new AuthService(authProvider!, oldAuthToken);
                 appServices.AddSingleton<IAuthService>(s => authService);
 
@@ -168,15 +167,38 @@ public class AppHub(
                     authToken = null;
                 }
 
-                if (authToken != oldAuthToken)
+                if (authToken != oldAuthToken || parentId != null)
                 {
-                    clientProvider.SetAuthToken(authToken, reloadPage: false);
+                    clientProvider.SetAuthToken(authToken, reloadPage: parentId != null && authToken == null);
                 }
 
                 if (authToken == null)
                 {
                     appId = AppIds.Auth;
                 }
+            }
+
+            if (string.IsNullOrEmpty(appId))
+            {
+                appId = server.DefaultAppId ?? server.AppRepository.GetAppOrDefault(null).Id;
+                var chromeApp = server.AppRepository.GetAppOrDefault(AppIds.Chrome);
+                if (chromeApp?.Id == AppIds.Chrome)
+                {
+                    string? chromeDefaultAppId = null;
+                    if (chromeApp.CreateApp() is DefaultSidebarChrome chromeView)
+                    {
+                        chromeDefaultAppId = chromeView.Settings.DefaultAppId;
+                    }
+                    if (appId == AppIds.Chrome && (parentId != null || !chrome))
+                    {
+                        appId = chromeDefaultAppId;
+                    }
+                    else if (chrome && navigationAppId == null)
+                    {
+                        navigationAppId = chromeDefaultAppId;
+                    }
+                }
+                appId = server.AppRepository.GetAppOrDefault(appId).Id;
             }
 
             var appArgs = GetAppArgs(Context.ConnectionId, appId, navigationAppId, httpContext);
@@ -200,7 +222,7 @@ public class AppHub(
             {
                 AppId = appId,
                 MachineId = GetMachineId(httpContext),
-                ParentId = GetParentId(httpContext),
+                ParentId = parentId,
                 AppDescriptor = appDescriptor,
                 App = app,
                 ConnectionId = Context.ConnectionId,
@@ -213,10 +235,14 @@ public class AppHub(
             var connectionAborted = Context.ConnectionAborted;
             appState.EventQueue = new EventDispatchQueue(connectionAborted);
 
-            if (appId != AppIds.Chrome && sessionStore.FindChrome(appState) == null)
+            if (parentId == null)
             {
-                var navigateArgs = new NavigateArgs(appId, Chrome: GetChromeParam(httpContext));
-                clientProvider.Redirect(navigateArgs.GetUrl(), replaceHistory: true);
+                clientProvider.SetRootAppId(appId);
+                if (appId != AppIds.Chrome)
+                {
+                    var navigateArgs = new NavigateArgs(appId, Chrome: chrome);
+                    clientProvider.Redirect(navigateArgs.GetUrl(), replaceHistory: true);
+                }
             }
 
             void OnWidgetTreeChanged(WidgetTreeChanged[] changes)
@@ -228,11 +254,13 @@ public class AppHub(
                     if (appState.UpdateScheduled) return;
                     appState.UpdateScheduled = true;
 
-                    appState.EventQueue?.Enqueue(async () =>
+                    // Use Task.Run instead of EventQueue to prevent UI updates from being blocked by long-running event handlers
+                    _ = Task.Run(async () =>
                     {
-                        try { await Task.Delay(16); }
+                        try { await Task.Delay(16, connectionAborted); }
                         catch
                         {
+                            // ignored
                         }
 
                         try
@@ -337,7 +365,11 @@ public class AppHub(
                             cs.Dispose();
                         }
                     }
-                    catch { }
+                    catch
+                    {
+                        // ignored
+                    }
+
                     appState.Dispose();
                 }
                 catch (Exception ex)
@@ -360,6 +392,7 @@ public class AppHub(
         HasToken,
         HasNoToken,
         TokenExpired,
+        TokenInvalid,
     }
 
     private async Task AuthRefreshLoopAsync(string connectionId, CancellationToken cancellationToken)
@@ -441,7 +474,7 @@ public class AppHub(
 
                             if (!isValid)
                             {
-                                state = AuthRefreshState.TokenExpired;
+                                state = AuthRefreshState.TokenInvalid;
                             }
                             else
                             {
@@ -473,12 +506,20 @@ public class AppHub(
                         break;
 
                     case AuthRefreshState.TokenExpired:
+                    case AuthRefreshState.TokenInvalid:
                         {
                             logger.LogInformation("AuthRefreshLoop: Attempting to refresh token for {ConnectionId}.", connectionId);
 
                             var newToken = await TimeoutHelper.WithTimeoutAsync(
                                 authService.RefreshAccessTokenAsync,
                                 cancellationToken);
+                            if (state == AuthRefreshState.TokenInvalid && token == newToken)
+                            {
+                                // This case should only ever happen if the auth provider implementation is bad (i.e. it returns the same invalid token on refresh).
+                                // It is still good to handle it here to avoid an infinite loop.
+                                logger.LogInformation("AuthRefreshLoop: Invalid token object unchanged after refresh for {ConnectionId}.", connectionId);
+                                newToken = null;
+                            }
                             if (token != newToken)
                             {
                                 logger.LogInformation("AuthRefreshLoop: updating stored token for {ConnectionId}.", connectionId);
@@ -606,38 +647,6 @@ public class AppHub(
         catch (Exception ex)
         {
             logger.LogError(ex, "Failed to send navigate signal: {ConnectionId} to [{AppId}]", Context.ConnectionId, appId);
-        }
-    }
-
-    private AuthToken? GetAuthToken(HttpContext httpContext)
-    {
-        var cookies = httpContext.Request.Cookies;
-        var authToken = cookies["auth_token"].NullIfEmpty();
-        if (authToken == null)
-        {
-            return null;
-        }
-
-        try
-        {
-            var token = JsonSerializer.Deserialize<AuthToken>(authToken);
-            if (token == null)
-            {
-                return null;
-            }
-
-            if (token.RefreshToken == null)
-            {
-                var refreshToken = cookies["auth_ext_refresh_token"].NullIfEmpty();
-                return token with { RefreshToken = refreshToken };
-            }
-
-            return token;
-        }
-        catch (Exception e)
-        {
-            logger.LogWarning(e, "Failed to deserialize AuthToken from cookies.");
-            return null;
         }
     }
 }

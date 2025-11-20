@@ -9,13 +9,18 @@ using Microsoft.Extensions.AI;
 
 namespace Ivy.Views.DataTables;
 
-public class DataTableBuilder<TModel> : ViewBase
+public class DataTableBuilder<TModel> : ViewBase, IMemoized
 {
     private readonly IQueryable<TModel> _queryable;
     private Size? _width;
     private Size? _height;
     private readonly Dictionary<string, InternalColumn> _columns;
-    private readonly DataTableConfiguration _configuration = new();
+    private readonly DataTableConfig _configuration = new();
+    private Func<Event<DataTable, CellClickEventArgs>, ValueTask>? _onCellClick;
+    private Func<Event<DataTable, CellClickEventArgs>, ValueTask>? _onCellActivated;
+    private MenuItem[]? _menuItemRowActions;
+    private Func<Event<DataTable, RowActionClickEventArgs>, ValueTask>? _onRowAction;
+    private readonly Dictionary<string, Action<object>> _cellActions = new();
 
     private class InternalColumn
     {
@@ -68,6 +73,11 @@ public class DataTableBuilder<TModel> : ViewBase
         if (underlyingType == typeof(Guid) || underlyingType.IsEnum)
             return Ivy.ColType.Text;
 
+        // Handle string arrays as Labels type
+        if (underlyingType.IsArray && underlyingType.GetElementType() == typeof(string))
+            return Ivy.ColType.Labels;
+
+        // Handle other arrays and collections as Text
         if (underlyingType.IsArray || typeof(System.Collections.IEnumerable).IsAssignableFrom(underlyingType))
             return Ivy.ColType.Text;
 
@@ -105,7 +115,7 @@ public class DataTableBuilder<TModel> : ViewBase
                 align = Shared.Align.Center;
             }
 
-            var removed = field.Name.StartsWith("_") && field.Name.Length > 1;
+            var removed = field.Name.StartsWith("_") && field.Name.Length > 1 && char.IsLetter(field.Name[1]);
 
             _columns[field.Name] = new InternalColumn()
             {
@@ -122,12 +132,22 @@ public class DataTableBuilder<TModel> : ViewBase
         }
     }
 
+    /// <summary>
+    /// Sets the overall width of the DataTable. For column-specific widths, use Width(Expression, Size).
+    /// </summary>
+    /// <param name="width">The desired width for the table.</param>
+    /// <returns>The builder for method chaining.</returns>
     public DataTableBuilder<TModel> Width(Size width)
     {
         _width = width;
         return this;
     }
 
+    /// <summary>
+    /// Sets the overall height of the DataTable.
+    /// </summary>
+    /// <param name="height">The desired height for the table.</param>
+    /// <returns>The builder for method chaining.</returns>
     public DataTableBuilder<TModel> Height(Size height)
     {
         _height = height;
@@ -207,6 +227,7 @@ public class DataTableBuilder<TModel> : ViewBase
     {
         var column = GetColumn(field);
         column.Column.Renderer = renderer;
+        column.Column.ColType = renderer.ColType;
         return this;
     }
 
@@ -239,7 +260,7 @@ public class DataTableBuilder<TModel> : ViewBase
         return this;
     }
 
-    public DataTableBuilder<TModel> Config(Action<DataTableConfiguration> config)
+    public DataTableBuilder<TModel> Config(Action<DataTableConfig> config)
     {
         config(_configuration);
         return this;
@@ -254,6 +275,37 @@ public class DataTableBuilder<TModel> : ViewBase
     public DataTableBuilder<TModel> LoadAllRows(bool loadAll = true)
     {
         _configuration.LoadAllRows = loadAll;
+        return this;
+    }
+
+    public DataTableBuilder<TModel> OnCellClick(Func<Event<DataTable, CellClickEventArgs>, ValueTask> handler)
+    {
+        _onCellClick = handler;
+        return this;
+    }
+
+    public DataTableBuilder<TModel> OnCellActivated(Func<Event<DataTable, CellClickEventArgs>, ValueTask> handler)
+    {
+        _onCellActivated = handler;
+        return this;
+    }
+
+    public DataTableBuilder<TModel> RowActions(params MenuItem[] actions)
+    {
+        _menuItemRowActions = actions;
+        return this;
+    }
+
+    public DataTableBuilder<TModel> HandleRowAction(Func<Event<DataTable, RowActionClickEventArgs>, ValueTask> handler)
+    {
+        _onRowAction = handler;
+        return this;
+    }
+
+    public DataTableBuilder<TModel> HandleCellAction(Expression<Func<TModel, object>> field, Action<object> action)
+    {
+        var columnName = Utils.GetNameFromMemberExpression(field.Body);
+        _cellActions[columnName] = action;
         return this;
     }
 
@@ -274,6 +326,39 @@ public class DataTableBuilder<TModel> : ViewBase
             configuration = _configuration with { AllowLlmFiltering = true };
         }
 
-        return new DataTableView(queryable, width, _height, columns, configuration);
+        // Automatically enable cell click events if handlers are provided
+        if (_onCellClick != null || _onCellActivated != null || _cellActions.Count > 0)
+        {
+            configuration = configuration with { EnableCellClickEvents = true };
+        }
+
+        // Wire up cell actions to OnCellActivated
+        Func<Event<DataTable, CellClickEventArgs>, ValueTask>? onCellActivated = _onCellActivated;
+        if (_cellActions.Count > 0)
+        {
+            var originalHandler = _onCellActivated;
+            onCellActivated = async (Event<DataTable, CellClickEventArgs> e) =>
+            {
+                var args = e.Value;
+                if (_cellActions.TryGetValue(args.ColumnName, out var action))
+                {
+                    action(args.CellValue!);
+                }
+
+                // Call original handler if it exists
+                if (originalHandler != null)
+                {
+                    await originalHandler(e);
+                }
+            };
+        }
+
+        return new DataTableView(queryable, width, _height, columns, configuration, _onCellClick, onCellActivated, _menuItemRowActions, _onRowAction);
+    }
+
+    public object[] GetMemoValues()
+    {
+        // Memoize based on configuration - if config hasn't changed, don't rebuild
+        return [_width!, _height!, _configuration];
     }
 }

@@ -230,13 +230,15 @@ public static class ButtonExtensions
         return button with { Tooltip = tooltip };
     }
 
-    /// <summary>Sets the loading state of the button.</summary>
-    /// <param name="button">Button to configure.</param>
-    /// <param name="loading">Whether button should be in loading state. Default is true.</param>
-    /// <returns>New Button instance with updated loading state.</returns>
     public static Button Loading(this Button button, bool loading = true)
     {
         return button with { Loading = loading };
+    }
+
+    /// <summary>Sets the loading state of the button based on a reactive state.</summary>
+    public static Button Loading(this Button button, IState<bool> loading)
+    {
+        return button.Loading(loading.Value);
     }
 
     /// <summary>Sets the click event handler for the button.</summary>

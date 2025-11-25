@@ -63,15 +63,9 @@ public static class CardExtensions
         };
     }
 
-    public static Card Title(this Card card, string title)
-    {
-        return card.Header(Text.Block(title), card.Description, card.Icon);
-    }
+    public static Card Title(this Card card, string title) => card.Header(Text.Block(title), card.Description, card.Icon);
 
-    public static Card Description(this Card card, string description)
-    {
-        return card.Header(card.Title, Text.Muted(description), card.Icon);
-    }
+    public static Card Description(this Card card, string description) => card.Header(card.Title, Text.Muted(description), card.Icon);
 
     public static Card Icon(this Card card, object? icon)
     {
@@ -92,15 +86,9 @@ public static class CardExtensions
 
     public static Card BorderColor(this Card card, Colors color) => card with { BorderColor = color };
 
-    public static Card Hover(this Card card, CardHoverVariant variant)
-    {
-        return card with { HoverVariant = variant };
-    }
+    public static Card Hover(this Card card, CardHoverVariant variant) => card with { HoverVariant = variant };
 
-    private static CardHoverVariant HoverVariantWithClick(this Card card)
-    {
-        return card.HoverVariant == CardHoverVariant.None ? CardHoverVariant.PointerAndTranslate : card.HoverVariant;
-    }
+    private static CardHoverVariant HoverVariantWithClick(this Card card) => card.HoverVariant == CardHoverVariant.None ? CardHoverVariant.PointerAndTranslate : card.HoverVariant;
 
     public static Card HandleClick(this Card card, Func<Event<Card>, ValueTask> onClick)
     {

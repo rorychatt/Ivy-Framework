@@ -26,6 +26,8 @@ public static class KanbanExtensions
             records,
             groupBySelector.Compile(),
             idSelector.Compile(),
-            orderSelector.Compile(), titleSelector?.Compile(), descriptionSelector?.Compile());
+            orderSelector.Compile(),
+            titleSelector?.Compile(),
+            descriptionSelector?.Compile());
     }
 }

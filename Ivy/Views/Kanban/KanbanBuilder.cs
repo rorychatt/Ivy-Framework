@@ -132,25 +132,9 @@ public class KanbanBuilder<TModel, TGroupKey>(
         return this;
     }
 
-    public KanbanBuilder<TModel, TGroupKey> Width(int units)
+    public KanbanBuilder<TModel, TGroupKey> Height(Size? height)
     {
-        _width = Size.Units(units);
-        return this;
-    }
-
-    public KanbanBuilder<TModel, TGroupKey> Width(float fraction)
-    {
-        _width = Size.Fraction(fraction);
-        return this;
-    }
-
-    public KanbanBuilder<TModel, TGroupKey> Width(string percent)
-    {
-        if (percent.EndsWith("%"))
-        {
-            if (float.TryParse(percent.Substring(0, percent.Length - 1), out var value))
-                _width = Size.Fraction(value / 100);
-        }
+        _height = height;
         return this;
     }
 
@@ -168,34 +152,6 @@ public class KanbanBuilder<TModel, TGroupKey>(
     public KanbanBuilder<TModel, TGroupKey> Width(TGroupKey groupKey, Size width)
     {
         _columnWidths[groupKey] = width;
-        return this;
-    }
-
-    public KanbanBuilder<TModel, TGroupKey> Height(Size? height)
-    {
-        _height = height;
-        return this;
-    }
-
-    public KanbanBuilder<TModel, TGroupKey> Height(int units)
-    {
-        _height = Size.Units(units);
-        return this;
-    }
-
-    public KanbanBuilder<TModel, TGroupKey> Height(float fraction)
-    {
-        _height = Size.Fraction(fraction);
-        return this;
-    }
-
-    public KanbanBuilder<TModel, TGroupKey> Height(string percent)
-    {
-        if (percent.EndsWith("%"))
-        {
-            if (float.TryParse(percent.Substring(0, percent.Length - 1), out var value))
-                _height = Size.Fraction(value / 100);
-        }
         return this;
     }
 

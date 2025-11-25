@@ -178,7 +178,7 @@ public class TableBuilder<TModel> : ViewBase, IStateless
         return this;
     }
 
-    public TableBuilder<TModel> Width(Expression<Func<TModel, object>> field, Size width)
+    public TableBuilder<TModel> ColumnWidth(Expression<Func<TModel, object>> field, Size width)
     {
         var hint = GetField(field);
         hint.Width = width;

@@ -84,19 +84,19 @@ public class KanbanBuilder<TModel, TGroupKey>(
         return this;
     }
 
-    public KanbanBuilder<TModel, TGroupKey> HandleCardMove(Func<Event<Ivy.Kanban, (object? CardId, TGroupKey ToColumn, int? TargetIndex)>, ValueTask> onMove)
+    public KanbanBuilder<TModel, TGroupKey> HandleMove(Func<Event<Ivy.Kanban, (object? CardId, TGroupKey ToColumn, int? TargetIndex)>, ValueTask> onMove)
     {
         _onMove = onMove;
         return this;
     }
 
-    public KanbanBuilder<TModel, TGroupKey> HandleCardMove(Action<Event<Ivy.Kanban, (object? CardId, TGroupKey ToColumn, int? TargetIndex)>> onMove)
+    public KanbanBuilder<TModel, TGroupKey> HandleMove(Action<Event<Ivy.Kanban, (object? CardId, TGroupKey ToColumn, int? TargetIndex)>> onMove)
     {
         _onMove = e => { onMove(e); return ValueTask.CompletedTask; };
         return this;
     }
 
-    public KanbanBuilder<TModel, TGroupKey> HandleCardMove(Action<(object? CardId, TGroupKey ToColumn, int? TargetIndex)> onMove)
+    public KanbanBuilder<TModel, TGroupKey> HandleMove(Action<(object? CardId, TGroupKey ToColumn, int? TargetIndex)> onMove)
     {
         _onMove = e => { onMove(e.Value); return ValueTask.CompletedTask; };
         return this;

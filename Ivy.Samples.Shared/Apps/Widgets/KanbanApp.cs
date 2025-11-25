@@ -57,7 +57,7 @@ public class BasicKanbanExample : ViewBase
                 .ColumnOrder(e => GetStatusOrder(e.Status))
                 .Width(Size.Full())
                 .Width(e => e.Status, Size.Fraction(0.33f))
-                .HandleCardMove(moveData =>
+                .HandleMove(moveData =>
                 {
                     var taskId = moveData.CardId?.ToString();
                     if (string.IsNullOrEmpty(taskId)) return;
@@ -191,7 +191,7 @@ public class KanbanBuilderExample : ViewBase
                 .ColumnOrder(e => GetStatusOrder(e.Status))
                 .Width(Size.Full())
                 .Width(e => e.Status, Size.Fraction(0.33f))
-                .HandleCardMove(moveData =>
+                .HandleMove(moveData =>
     {
         var taskId = moveData.CardId?.ToString();
         if (string.IsNullOrEmpty(taskId)) return;

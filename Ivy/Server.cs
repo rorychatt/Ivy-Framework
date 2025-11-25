@@ -165,6 +165,11 @@ public class Server
         return UseChrome(() => new DefaultSidebarChrome(settings));
     }
 
+    public Server UseChrome<T>() where T : ViewBase
+    {
+        return UseChrome((() => (ViewBase)Activator.CreateInstance(typeof(T))!));
+    }
+
     public Server UseChrome(Func<ViewBase>? viewFactory = null)
     {
         AddApp(new AppDescriptor

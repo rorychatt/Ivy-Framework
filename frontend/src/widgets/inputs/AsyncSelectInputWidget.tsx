@@ -37,9 +37,9 @@ const asyncSelectTextVariants = {
 };
 
 const asyncSelectIconContainerVariants = {
-  Small: 'w-7',
-  Medium: 'w-9',
-  Large: 'w-11',
+  Small: 'w-5',
+  Medium: 'w-6',
+  Large: 'w-8',
 };
 
 const asyncSelectIconVariants = {
@@ -49,9 +49,9 @@ const asyncSelectIconVariants = {
 };
 
 const asyncSelectInvalidIconVariants = {
-  Small: 'right-7 top-1.5',
-  Medium: 'right-11 top-2.5',
-  Large: 'right-11 top-3.5',
+  Small: 'right-5 top-1.5',
+  Medium: 'right-6 top-2.5',
+  Large: 'right-8 top-3.5',
 };
 
 interface AsyncSelectInputWidgetProps {
@@ -122,7 +122,7 @@ export const AsyncSelectInputWidget: React.FC<AsyncSelectInputWidgetProps> = ({
     <span
       ref={displayValueRef}
       className={cn(
-        'grow text-primary font-semibold ml-3 underline overflow-hidden text-ellipsis whitespace-nowrap',
+        'grow text-primary font-semibold underline overflow-hidden text-ellipsis whitespace-nowrap',
         asyncSelectTextVariants[scale]
       )}
     >
@@ -162,7 +162,7 @@ export const AsyncSelectInputWidget: React.FC<AsyncSelectInputWidgetProps> = ({
         {!displayValue && (
           <span
             className={cn(
-              'grow text-muted-foreground ml-3',
+              'grow text-muted-foreground',
               asyncSelectTextVariants[scale]
             )}
           >
@@ -171,11 +171,17 @@ export const AsyncSelectInputWidget: React.FC<AsyncSelectInputWidgetProps> = ({
         )}
         <div
           className={cn(
-            'flex items-center justify-center h-full border-l',
+            'absolute top-0 bottom-0 border-l flex items-center justify-end shrink-0',
+            'right-2.5',
             asyncSelectIconContainerVariants[scale]
           )}
         >
-          <ChevronRight className={cn(asyncSelectIconVariants[scale])} />
+          <ChevronRight
+            className={cn(
+              'opacity-50 shrink-0',
+              asyncSelectIconVariants[scale]
+            )}
+          />
         </div>
       </button>
       {invalid && (

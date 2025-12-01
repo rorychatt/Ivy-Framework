@@ -45,28 +45,34 @@ export const ExpandableWidget: React.FC<ExpandableWidgetProps> = ({
     }
   }, [disabled, isOpen]);
 
-  const handleHeaderClick = (e: React.MouseEvent) => {
-    // Stop propagation if clicking on interactive elements (buttons, inputs, etc.)
+  const handleOpenChange = (newOpen: boolean) => {
+    // Prevent toggle if disabled
+    if (disabled) {
+      return;
+    }
+    setIsOpen(newOpen);
+  };
+
+  const handleTriggerClick = (e: React.MouseEvent) => {
+    // If clicking on an interactive element, stop propagation so it doesn't toggle
     const target = e.target as HTMLElement;
     const isInteractiveElement =
-      target.closest('button') ||
+      target.closest('button:not([data-collapsible-trigger])') ||
       target.closest('input') ||
       target.closest('select') ||
-      target.closest('[role="button"]') ||
+      target.closest('[role="button"]:not([data-collapsible-trigger])') ||
       target.closest('[role="switch"]') ||
       target.closest('[role="checkbox"]') ||
-      target.closest('a[href]') ||
-      target.closest('[onclick]') ||
-      target.closest('[data-interactive]');
+      target.closest('a[href]');
 
     if (isInteractiveElement) {
       e.stopPropagation();
     }
-  };
 
-  const handleOpenChange = (newOpen: boolean) => {
-    if (!disabled) {
-      setIsOpen(newOpen);
+    // Prevent toggle if disabled
+    if (disabled) {
+      e.preventDefault();
+      e.stopPropagation();
     }
   };
 
@@ -85,6 +91,8 @@ export const ExpandableWidget: React.FC<ExpandableWidgetProps> = ({
       <CollapsibleTrigger
         disabled={false}
         className={cn(expandableTriggerVariants({ scale }), 'relative')}
+        onClick={handleTriggerClick}
+        data-collapsible-trigger
       >
         <div
           className={expandableHeaderVariants({ scale })}
